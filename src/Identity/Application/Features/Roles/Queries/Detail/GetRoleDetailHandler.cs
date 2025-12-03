@@ -1,0 +1,37 @@
+using Application.Errors;
+using Contracts.ApiWrapper;
+using IdentityApplication.Common.Constants;
+using IdentityApplication.Common.Interfaces.Services.Identity;
+using IdentityDomain.Aggregates.Roles;
+using Mediator;
+using SharedKernel.Common.Messages;
+
+namespace IdentityApplication.Features.Roles.Queries.Detail;
+
+public class GetRoleDetailHandler(IRoleManagerService roleManagerService)
+    : IRequestHandler<GetRoleDetailQuery, Result<RoleDetailResponse>>
+{
+    public async ValueTask<Result<RoleDetailResponse>> Handle(
+        GetRoleDetailQuery query,
+        CancellationToken cancellationToken
+    )
+    {
+        Role? role = await roleManagerService.FindByIdAsync(query.Id);
+
+        if (role == null)
+        {
+            return Result<RoleDetailResponse>.Failure(
+                new NotFoundError(
+                    TitleMessage.RESOURCE_NOT_FOUND,
+                    Messenger
+                        .Create<Role>()
+                        .Message(MessageType.Found)
+                        .Negative()
+                        .VietnameseTranslation(TranslatableMessage.VI_ROLE_NOT_FOUND)
+                        .Build()
+                )
+            );
+        }
+        return Result<RoleDetailResponse>.Success(role.ToRoleDetailResponse());
+    }
+}
