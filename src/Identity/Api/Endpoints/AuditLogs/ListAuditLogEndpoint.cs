@@ -1,0 +1,44 @@
+using Api.Documents;
+using Api.Results;
+using Contracts.ApiWrapper;
+using IdentityApi.Common.EndpointConfigurations;
+using IdentityApi.Common.Routers;
+using IdentityApplication.Features.AuditLogs.Queries;
+using Mediator;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.OpenApi.Models;
+using SharedKernel.Models;
+
+namespace IdentityApi.Endpoints.AuditLogs;
+
+public class ListAuditLogEndpoint : IEndpoint
+{
+    public EndpointVersion Version => EndpointVersion.One;
+
+    public void MapEndpoint(IEndpointRouteBuilder app)
+    {
+        app.MapGet(Router.AuditLogRoute.AuditLog, HandleAsync)
+            .WithOpenApi(operation => new OpenApiOperation(operation)
+            {
+                Summary = "Get list of audit logs",
+                Description = "Returns a list of audit logs",
+                Tags = [new OpenApiTag() { Name = Router.AuditLogRoute.Tags }],
+                Parameters = operation.AddDocs(),
+            });
+    }
+
+    private async Task<
+        Results<Ok<ApiResponse<PaginationResponse<ListAuditLogResponse>>>, ProblemHttpResult>
+    > HandleAsync(
+        ListAuditLogQuery request,
+        [FromServices] ISender sender,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var result = await sender.Send(request, cancellationToken);
+        return result.ToResult();
+    }
+}
