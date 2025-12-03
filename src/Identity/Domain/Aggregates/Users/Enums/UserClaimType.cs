@@ -1,0 +1,8 @@
+namespace IdentityDomain.Aggregates.Users.Enums;
+
+public enum UserClaimType
+{
+    Default = 1,
+
+    Custom = 2,
+}
