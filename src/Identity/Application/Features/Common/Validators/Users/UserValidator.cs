@@ -1,0 +1,157 @@
+using Application.Interfaces.Services;
+using FluentValidation;
+using IdentityApplication.Common.Interfaces.Services.Identity;
+using IdentityApplication.Features.Common.Payloads.Users;
+using IdentityDomain.Aggregates.Users;
+using Microsoft.EntityFrameworkCore;
+using SharedKernel.Common.Messages;
+using Application.Extensions;
+
+namespace IdentityApplication.Features.Common.Validators.Users;
+
+public partial class UserValidator : AbstractValidator<UserPayload>
+{
+    private readonly IHttpContextAccessorService httpContextAccessorService;
+    private readonly IUserManagerService userManagerService;
+
+    public UserValidator(
+        IUserManagerService userManagerService,
+        IHttpContextAccessorService httpContextAccessorService,
+        ICurrentUser currentUser
+    )
+    {
+        this.httpContextAccessorService = httpContextAccessorService;
+        this.userManagerService = userManagerService;
+        ApplyRules(currentUser);
+    }
+
+    private void ApplyRules(ICurrentUser currentUser)
+    {
+        _ = Ulid.TryParse(httpContextAccessorService.GetId(), out Ulid id);
+        string? requestPath = httpContextAccessorService.GetRequestPath();
+
+        if (requestPath == "/api/v1/users/profile")
+        {
+            id = currentUser.Id!.Value;
+        }
+
+        RuleFor(x => x.LastName)
+            .NotEmpty()
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.LastName)
+                    .Message(MessageType.Null)
+                    .Negative()
+                    .Build()
+            )
+            .MaximumLength(256)
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.LastName)
+                    .Message(MessageType.MaximumLength)
+                    .Build()
+            );
+
+        RuleFor(x => x.FirstName)
+            .NotEmpty()
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.FirstName)
+                    .Message(MessageType.Null)
+                    .Negative()
+                    .Build()
+            )
+            .MaximumLength(256)
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.FirstName)
+                    .Message(MessageType.MaximumLength)
+                    .Build()
+            );
+
+        RuleFor(x => x.Email)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty()
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.Email)
+                    .Message(MessageType.Null)
+                    .Negative()
+                    .Build()
+            )
+            .Must(x => x!.IsValidEmail())
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.Email)
+                    .Message(MessageType.Valid)
+                    .Negative()
+                    .Build()
+            )
+            .MustAsync(
+                (email, cancellationToken) => IsEmailAvailableAsync(email!, id, cancellationToken)
+            )
+            .When(
+                _ => httpContextAccessorService.GetHttpMethod() == HttpMethod.Put.ToString(),
+                ApplyConditionTo.CurrentValidator
+            )
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.Email)
+                    .Message(MessageType.Existence)
+                    .Build()
+            )
+            .MustAsync(
+                (email, cancellationToken) =>
+                    IsEmailAvailableAsync(email!, cancellationToken: cancellationToken)
+            )
+            .When(
+                _ => httpContextAccessorService.GetHttpMethod() == HttpMethod.Post.ToString(),
+                ApplyConditionTo.CurrentValidator
+            )
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.Email)
+                    .Message(MessageType.Existence)
+                    .Build()
+            );
+
+        RuleFor(x => x.PhoneNumber)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty()
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.PhoneNumber)
+                    .Message(MessageType.Null)
+                    .Negative()
+                    .Build()
+            )
+            .Must(x => x!.IsValidPhoneNumber())
+            .WithState(x =>
+                Messenger
+                    .Create<User>()
+                    .Property(x => x.PhoneNumber)
+                    .Message(MessageType.Valid)
+                    .Negative()
+                    .Build()
+            );
+    }
+
+    private async Task<bool> IsEmailAvailableAsync(
+        string email,
+        Ulid? id = null,
+        CancellationToken cancellationToken = default
+    ) =>
+        !await userManagerService.User.AnyAsync(
+            x => x.Email == email && (!id.HasValue || x.Id != id.Value),
+            cancellationToken
+        );
+}

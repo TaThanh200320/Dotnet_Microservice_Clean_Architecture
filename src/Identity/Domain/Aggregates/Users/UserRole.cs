@@ -1,0 +1,12 @@
+using IdentityDomain.Aggregates.Roles;
+
+namespace IdentityDomain.Aggregates.Users;
+
+public class UserRole
+{
+    public Ulid UserId { get; set; }
+    public User? User { get; set; }
+
+    public Ulid RoleId { get; set; }
+    public Role? Role { get; set; }
+}
