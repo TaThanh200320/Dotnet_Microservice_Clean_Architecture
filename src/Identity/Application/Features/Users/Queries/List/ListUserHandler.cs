@@ -1,0 +1,45 @@
+using Application.Interfaces.UnitOfWorks;
+using Application.QueryStringProcessing;
+using Contracts.ApiWrapper;
+using IdentityDomain.Aggregates.Users;
+using IdentityDomain.Aggregates.Users.Specifications;
+using Mediator;
+using Microsoft.Extensions.Logging;
+using SharedKernel.Models;
+
+namespace IdentityApplication.Features.Users.Queries.List;
+
+public class ListUserHandler(IUnitOfWork unitOfWork, ILogger<ListUserHandler> logger)
+    : IRequestHandler<ListUserQuery, Result<PaginationResponse<ListUserResponse>>>
+{
+    public async ValueTask<Result<PaginationResponse<ListUserResponse>>> Handle(
+        ListUserQuery query,
+        CancellationToken cancellationToken
+    )
+    {
+        var validationResult = query.ValidateQuery();
+        if (validationResult.Error != null)
+        {
+            return Result<PaginationResponse<ListUserResponse>>.Failure(validationResult.Error);
+        }
+
+        var validationFilterResult = query.ValidateFilter<ListUserQuery, User>(logger);
+        if (validationFilterResult.Error != null)
+        {
+            return Result<PaginationResponse<ListUserResponse>>.Failure(
+                validationFilterResult.Error
+            );
+        }
+
+        var response = await unitOfWork
+            .DynamicReadOnlyRepository<User>(true)
+            .CursorPagedListAsync(
+                new ListUserSpecification(),
+                query,
+                ListUserMapping.Selector(),
+                cancellationToken: cancellationToken
+            );
+
+        return Result<PaginationResponse<ListUserResponse>>.Success(response);
+    }
+}

@@ -1,0 +1,32 @@
+using Application.Interfaces.Services.Elasticsearch;
+using Elastic.Clients.Elasticsearch;
+using Microsoft.Extensions.Options;
+
+namespace IdentityInfrastructure.Services.Elasticsearch;
+
+public class ElasticsearchServiceFactory(
+    ElasticsearchClient elasticClient,
+    IOptions<ElasticsearchSettings> options
+) : IElasticsearchServiceFactory
+{
+    private readonly Dictionary<string, object?> repositories = [];
+
+    public IElasticsearchService<TEntity> Get<TEntity>()
+        where TEntity : class
+    {
+        string type = typeof(TEntity).Name;
+
+        if (!repositories.TryGetValue(type, out object? value))
+        {
+            Type repositoryType = typeof(ElasticsearchService<>);
+            object? repositoryInstance = Activator.CreateInstance(
+                repositoryType.MakeGenericType(typeof(TEntity)),
+                [elasticClient, options]
+            );
+            value = repositoryInstance;
+            repositories.Add(type, value);
+        }
+
+        return (IElasticsearchService<TEntity>)value!;
+    }
+}

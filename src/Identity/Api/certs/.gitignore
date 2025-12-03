@@ -1,0 +1,5 @@
+# Keep directory structure but ignore all PEM files
+*.pem
+
+# Allow the README
+!README.md
