@@ -1,0 +1,47 @@
+**/.classpath
+**/.dockerignore
+**/.env
+**/.git
+**/.gitignore
+**/.project
+**/.settings
+**/.toolstarget
+**/.vs
+**/.vscode
+**/*.*proj.user
+**/*.dbmdl
+**/*.jfm
+**/bin
+**/charts
+**/docker compose*
+**/compose*
+**/Dockerfile*
+**/node_modules
+**/npm-debug.log
+**/obj
+**/secrets.dev.yaml
+**/values.dev.yaml
+README.md
+
+# Docker infrastructure folders (exclude all except Otel config)
+dockers/Postgresql/
+dockers/Redis/
+dockers/RabbitMQ/
+dockers/MinioS3/
+dockers/ElasticSearch/
+dockers/Seq/
+
+# Docker volumes and data
+postgres-data/
+redis-data/
+rabbitmq-data/
+minio-data/
+elasticsearch-data/
+seq-data/
+jaeger-data/
+pgadmin-data/
+nginx-logs/
+
+# Certificates
+src/Identity/Api/certs/*.key
+src/Identity/Api/certs/*.pem

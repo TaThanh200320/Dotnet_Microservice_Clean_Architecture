@@ -1,0 +1,344 @@
+version: "3.8"
+
+services:
+  # ==================== Infrastructure Services ====================
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: microservice-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB:-identitydb}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - microservice-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-identitydb}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # PgAdmin - PostgreSQL Web UI
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: microservice-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin123}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+  # Adminer - Lightweight Database Management
+  adminer:
+    image: adminer:latest
+    container_name: microservice-adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: pepa-linha
+    ports:
+      - "${ADMINER_PORT:-8082}:8080"
+    depends_on:
+      - postgres
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:8-alpine
+    container_name: microservice-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis123}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - microservice-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Commander - Redis Web UI
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: microservice-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD:-redis123}
+      HTTP_USER: ${REDIS_COMMANDER_USER:-admin}
+      HTTP_PASSWORD: ${REDIS_COMMANDER_PASSWORD:-admin123}
+    ports:
+      - "${REDIS_COMMANDER_PORT:-8083}:8081"
+    depends_on:
+      - redis
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: microservice-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin123}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - microservice-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # MinIO S3 Storage
+  minio:
+    image: minio/minio:latest
+    container_name: microservice-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-admin123456}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - microservice-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: microservice-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - cluster.name=microservice-cluster
+      - bootstrap.memory_lock=true
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - microservice-network
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  # Seq Logging
+  seq:
+    image: datalust/seq:latest
+    container_name: microservice-seq
+    environment:
+      ACCEPT_EULA: Y
+      SEQ_FIRSTRUN_ADMINPASSWORD: ${SEQ_ADMIN_PASSWORD:-admin123}
+      SEQ_API_KEY: ${SEQ_API_KEY:-}
+    ports:
+      - "${SEQ_PORT:-5341}:5341"
+      - "${SEQ_UI_PORT:-8084}:80"
+    volumes:
+      - seq-data:/data
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: microservice-otel
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./config/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317" # OTLP gRPC receiver
+      - "${OTEL_HTTP_PORT:-4318}:4318" # OTLP HTTP receiver
+      - "${OTEL_METRICS_PORT:-8888}:8888" # Prometheus metrics
+      - "13133:13133" # health_check extension
+    depends_on:
+      - jaeger
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+  # Jaeger - Distributed Tracing UI
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    container_name: microservice-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: badger
+      BADGER_EPHEMERAL: "false"
+      BADGER_DIRECTORY_VALUE: /badger/data
+      BADGER_DIRECTORY_KEY: /badger/key
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686" # Jaeger UI
+      - "6831:6831/udp" # UDP port for receiving traces
+      - "14268:14268" # Jaeger collector HTTP port
+      - "14250:14250" # gRPC for Jaeger
+    volumes:
+      - jaeger-data:/badger
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+  # ==================== Application Services ====================
+
+  # Identity Service
+  identity-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: microservice-identity
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - ASPNETCORE_URLS=http://+:80
+      - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+
+      # Database (using DatabaseSettings__DatabaseConnection format)
+      - DatabaseSettings__DatabaseConnection=Host=postgres;Port=5432;Database=identitydb;Username=${POSTGRES_USER:-admin};Password=${POSTGRES_PASSWORD:-admin123}
+
+      # Redis
+      - Redis__Configuration=redis:6379,password=${REDIS_PASSWORD:-redis123}
+      - "Redis__InstanceName=Identity:"
+
+      # RabbitMQ
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__Username=${RABBITMQ_USER:-admin}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD:-admin123}
+      - RabbitMQ__VirtualHost=${RABBITMQ_VHOST:-/}
+
+      # S3/MinIO Storage (AWS S3 Compatible)
+      - S3AwsSettings__ServiceUrl=http://minio:9000
+      - S3AwsSettings__AccessKey=${MINIO_ROOT_USER:-admin}
+      - S3AwsSettings__SecretKey=${MINIO_ROOT_PASSWORD:-admin123456}
+      - S3AwsSettings__BucketName=${S3_BUCKET_NAME:-identity-bucket}
+      - S3AwsSettings__PublicUrl=http://localhost:9000
+      - S3AwsSettings__PreSignedUrlExpirationInMinutes=60
+      - S3AwsSettings__Protocol=HTTP
+
+      # Elasticsearch
+      - Elasticsearch__Uri=http://elasticsearch:9200
+
+      # Seq
+      - Seq__ServerUrl=http://seq:5341
+      - Seq__ApiKey=${SEQ_API_KEY:-}
+
+      # OpenTelemetry
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=identity-service
+
+      # JWT (using certificate-based authentication from /app/certs)
+      - JWT__Issuer=${JWT_ISSUER:-microservice-identity}
+      - JWT__Audience=${JWT_AUDIENCE:-microservice-api}
+      - JWT__ExpirationMinutes=${JWT_EXPIRATION_MINUTES:-60}
+
+    ports:
+      - "${IDENTITY_SERVICE_PORT:-5001}:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - microservice-network
+    restart: unless-stopped
+    volumes:
+      - ./src/Identity/Api/certs:/app/certs:ro
+
+  # ==================== Gateway & Proxy ====================
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: microservice-nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx-logs:/var/log/nginx
+    depends_on:
+      - identity-service
+    networks:
+      - microservice-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ==================== Networks ====================
+networks:
+  microservice-network:
+    driver: bridge
+    name: microservice-network
+
+# ==================== Volumes ====================
+volumes:
+  postgres-data:
+    name: microservice-postgres-data
+  pgadmin-data:
+    name: microservice-pgadmin-data
+  redis-data:
+    name: microservice-redis-data
+  rabbitmq-data:
+    name: microservice-rabbitmq-data
+  minio-data:
+    name: microservice-minio-data
+  elasticsearch-data:
+    name: microservice-elasticsearch-data
+  seq-data:
+    name: microservice-seq-data
+  jaeger-data:
+    name: microservice-jaeger-data
