@@ -672,7 +672,7 @@ curl -X GET "http://localhost:5001/api/v1/users?search=john&filter=isActive==tru
 
 ## Postman Collection
 
-Import Postman collection từ: `/docs/postman/STC-Microservice.postman_collection.json`
+Import Postman collection từ: `/docs/postman/Microservice.postman_collection.json`
 
 **Environment Variables:**
 - `base_url`: `http://localhost:5001`
