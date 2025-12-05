@@ -53,7 +53,7 @@ Một template microservice .NET Core hoàn chỉnh với Clean Architecture, Do
 ```bash
 # 1. Clone repository
 git clone <repository-url>
-cd STC-Asp_DotNet_Core
+cd Dotnet_Microservice_Clean_Architecture
 
 # 2. Copy và cấu hình environment variables
 cp .env.example .env
@@ -82,7 +82,7 @@ Hệ thống sẽ khởi động tất cả services, đợi khoảng 1-2 phút 
 ## 📁 Cấu trúc dự án
 
 ```
-STC-Asp_DotNet_Core/
+Dotnet_Microservice_Clean_Architecture/
 ├── src/                            # Source code
 │   └── Identity/                   # Identity Service (Authentication)
 │       ├── Api/                    # API Layer

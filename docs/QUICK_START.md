@@ -13,7 +13,7 @@ Hướng dẫn nhanh để khởi chạy hệ thống microservice .NET Core.
 
 ```bash
 git clone <repository-url>
-cd STC-Asp_DotNet_Core
+cd Dotnet_Microservice_Clean_Architecture
 ```
 
 ## Bước 2: Cấu hình Environment

@@ -22,4 +22,8 @@
     <ProjectReference Include="..\Infrastructure\IdentityInfrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Resources\**\*.resx" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
